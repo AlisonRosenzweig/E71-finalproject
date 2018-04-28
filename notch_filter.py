@@ -5,7 +5,7 @@ import sys
 import matplotlib.pyplot as plt
 import adaptfilt
 
-FREQ_INC_AMT = .05 # Hz
+FREQ_INC_AMT = .01 # Hz
 
 def notch_filter(input_signal, sampling_period, freq=60, r=.99):
   print freq
@@ -19,13 +19,11 @@ def notch_filter(input_signal, sampling_period, freq=60, r=.99):
   return signal.lfilter(b, a, input_signal)
 
 
-def band_pass(input_signal):
-  # w_lo = 55./500
-  # w_hi = 65./500
+def band_pass(input_signal, w_lo, w_hi):
+  w_lo = 55./500
+  w_hi = 65./500
+  b, a = signal.butter(1, [w_lo, w_hi], "bandpass")
   
-  # b, a = signal.butter(2, [w_lo, w_hi], "bandpass")
-  b = [.003132, 0, -.003132]
-  a = [1., -1.8537, 0.9937]
   return signal.lfilter(b, a, input_signal)
 
 """
@@ -70,10 +68,10 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
     next_segment[:] = input_signal[i:end]
     filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
     doubled_filtered_segment = band_pass(filtered_segment)
-    e = energy(double_filtered_segment[samples_to_adapt:])
-    plt.figure()
-    plt.plot(double_filtered_segment[samples_to_adapt:])
-    plt.show()
+    e = energy(filtered_segment[samples_to_adapt:])
+    #plt.figure()
+    #plt.plot(double_filtered_segment[samples_to_adapt:])
+    #plt.show()
     print "energy", e
     if e < prev_e:
       # Move frequency in the same direction as last time.

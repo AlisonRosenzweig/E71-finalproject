@@ -80,13 +80,19 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
 def energy(signal):
   return sum(np.power(signal, 2))
 
+
+def mse(signal_a, signal_b):
+  return ((np.array(signal_a) - np.array(signal_b)) ** 2).mean()
+
 if __name__=="__main__":
-  if len(sys.argv) < 2: 
+  if len(sys.argv) < 3: 
     print(
-      "please give commandline argument [path to signal with noise]")
+      "please give commandline argument [path to signal with noise]" +
+      " [path to signal without noise]")
     exit()
   noise_file = sys.argv[1]
-  if len(sys.argv) > 2:
+  no_noise_file = sys.argv[2]
+  if len(sys.argv) > 3:
     sampling_period = float(sys.argv[2])
   else:
     sampling_period = .001
@@ -97,6 +103,12 @@ if __name__=="__main__":
     for row in reader:
       noise_data.append(float(row[0]))
 
+  no_noise_signal = []
+  with open(no_noise_file) as no_noise_csv:
+    reader = csv.reader(no_noise_csv)
+    for row in reader:
+      no_noise_signal.append(float(row[0]))
+
   filtered = notch_filter(noise_data, sampling_period)
 
   adapt_filtered = adaptive_notch(noise_data)
@@ -105,6 +117,12 @@ if __name__=="__main__":
     for item in adapt_filtered:
       writer.writerow([item])
 
+
+  # calculate the mean squared error. 
+  mse_std_notch = mse(no_noise_signal, filtered)
+  mse_adapt_notch = mse(no_noise_signal, adapt_filtered)
+  print "standard notch error:", mse_std_notch
+  print "adaptive notch error:", mse_adapt_notch
 
   # plot the original unfiltered noise data
   plt.figure()

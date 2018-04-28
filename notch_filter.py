@@ -8,6 +8,7 @@ import adaptfilt
 FREQ_INC_AMT = .05 # Hz
 
 def notch_filter(input_signal, sampling_period, freq=60, r=.99):
+  print freq
   N = np.cos(2*np.pi*freq*sampling_period)
   # Equation from textbook
   b = [1, -2*N, 1]
@@ -15,8 +16,16 @@ def notch_filter(input_signal, sampling_period, freq=60, r=.99):
   b_0 = sum(a)/sum(b)
 
   b = np.array(b) * b_0
-  print "b:", b
-  print "a:", a
+  return signal.lfilter(b, a, input_signal)
+
+
+def band_pass(input_signal):
+  # w_lo = 55./500
+  # w_hi = 65./500
+  
+  # b, a = signal.butter(2, [w_lo, w_hi], "bandpass")
+  b = [.003132, 0, -.003132]
+  a = [1., -1.8537, 0.9937]
   return signal.lfilter(b, a, input_signal)
 
 """
@@ -47,21 +56,25 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
   output = []
   next_segment[:] = input_signal[0:samples_per_segment] 
   filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
+  double_filtered_segment = band_pass(filtered_segment)
   
   output = np.concatenate([output, filtered_segment])
 
-  prev_e = energy(output[samples_to_adapt:])
+  prev_e = energy(double_filtered_segment[samples_to_adapt:])
   last_inc_dir = 1
   i = samples_btwn_segments
   while i < (len(input_signal) - samples_to_adapt):
-    print i
     end = i + samples_per_segment
     if end > len(input_signal):
       end = len(input_signal)
     next_segment[:] = input_signal[i:end]
     filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
-    print len(filtered_segment)
-    e = energy(filtered_segment[samples_to_adapt:])
+    doubled_filtered_segment = band_pass(filtered_segment)
+    e = energy(double_filtered_segment[samples_to_adapt:])
+    plt.figure()
+    plt.plot(double_filtered_segment[samples_to_adapt:])
+    plt.show()
+    print "energy", e
     if e < prev_e:
       # Move frequency in the same direction as last time.
       freq += last_inc_dir*FREQ_INC_AMT 
@@ -70,10 +83,8 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
       last_inc_dir *= -1
       freq += last_inc_dir*FREQ_INC_AMT
     output = np.concatenate([output, filtered_segment[samples_to_adapt:]])
-    print len(filtered_segment[samples_to_adapt:])
     prev_e = e
     i += samples_btwn_segments
-    print len(output)
 
   return output
 
@@ -106,8 +117,11 @@ if __name__=="__main__":
   no_noise_signal = []
   with open(no_noise_file) as no_noise_csv:
     reader = csv.reader(no_noise_csv)
+    # Skip the first two rows - header info.
+    next(reader)
+    next(reader)
     for row in reader:
-      no_noise_signal.append(float(row[0]))
+      no_noise_signal.append(float(row[1]))
 
   filtered = notch_filter(noise_data, sampling_period)
 
@@ -137,5 +151,9 @@ if __name__=="__main__":
   plt.figure()
   plt.plot(adapt_filtered)
   plt.title('adaptive notch filter output')
+
+  plt.figure()
+  plt.plot(band_pass(noise_data[:5000]))
+  plt.title("ahhhhhhhhhhhhhhhhhhhh")
 
   plt.show()

@@ -19,7 +19,7 @@ def notch_filter(input_signal, sampling_period, freq=60, r=.99):
   return signal.lfilter(b, a, input_signal)
 
 
-def band_pass(input_signal, w_lo, w_hi):
+def band_pass(input_signal, w_lo=, w_hi):
   w_lo = 55./500
   w_hi = 65./500
   b, a = signal.butter(1, [w_lo, w_hi], "bandpass")
@@ -44,7 +44,7 @@ returns:
   An array containing the filtered input signal.
 """
 def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
-                   samples_to_adapt=600):
+                   samples_to_adapt=600, double_filter=False):
   # Calculate the number of samples in each segment.
   samples_per_segment = 3*samples_to_adapt
   samples_btwn_segments = 2*samples_to_adapt
@@ -61,18 +61,20 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
   prev_e = energy(double_filtered_segment[samples_to_adapt:])
   last_inc_dir = 1
   i = samples_btwn_segments
+  energies = []
   while i < (len(input_signal) - samples_to_adapt):
     end = i + samples_per_segment
     if end > len(input_signal):
       end = len(input_signal)
     next_segment[:] = input_signal[i:end]
     filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
-    doubled_filtered_segment = band_pass(filtered_segment)
-    e = energy(filtered_segment[samples_to_adapt:])
-    #plt.figure()
-    #plt.plot(double_filtered_segment[samples_to_adapt:])
-    #plt.show()
+    if double_filter:
+      doubled_filtered_segment = band_pass(filtered_segment)
+      e = energy(double_filtered_segment[samples_to_adapt:])
+    else:
+      e = energy(filtered_segment[samples_to_adapt:])
     print "energy", e
+    energies.append(e)
     if e < prev_e:
       # Move frequency in the same direction as last time.
       freq += last_inc_dir*FREQ_INC_AMT 
@@ -84,7 +86,7 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
     prev_e = e
     i += samples_btwn_segments
 
-  return output
+  return output, energy
 
 def energy(signal):
   return sum(np.power(signal, 2))
@@ -101,10 +103,12 @@ if __name__=="__main__":
     exit()
   noise_file = sys.argv[1]
   no_noise_file = sys.argv[2]
-  if len(sys.argv) > 3:
-    sampling_period = float(sys.argv[2])
-  else:
-    sampling_period = .001
+  if len(sys.argv) >= 3:
+    # optional commandline arg determines if energy is based on band-passed
+    # filtered signal (true) or just the filtered signal (false)
+    double_filter = bool(sys.argv[2])
+  
+  sampling_period = .001
   
   noise_data = []
   with open(noise_file) as noise_csv:
@@ -124,11 +128,12 @@ if __name__=="__main__":
   filtered = notch_filter(noise_data, sampling_period)
 
   adapt_filtered = adaptive_notch(noise_data)
+  """
   with open("output_4-28-001.csv", "wb") as adapt_output:
     writer = csv.writer(adapt_output)
     for item in adapt_filtered:
       writer.writerow([item])
-
+  """
 
   # calculate the mean squared error. 
   mse_std_notch = mse(no_noise_signal, filtered)

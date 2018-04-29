@@ -19,9 +19,13 @@ def notch_filter(input_signal, sampling_period, freq=60, r=.99):
   return signal.lfilter(b, a, input_signal)
 
 
-def band_pass(input_signal, w_lo=, w_hi):
-  w_lo = 55./500
-  w_hi = 65./500
+"""
+band_pass: Returns a band-passed version of the input signal with cutoff
+  frequencies w_lo and w_hi given in Hz.
+"""
+def band_pass(input_signal, w_lo, w_hi):
+  w_lo = float(w_lo)/500
+  w_hi = float(w_hi)/500
   b, a = signal.butter(1, [w_lo, w_hi], "bandpass")
   
   return signal.lfilter(b, a, input_signal)
@@ -54,14 +58,17 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
   output = []
   next_segment[:] = input_signal[0:samples_per_segment] 
   filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
-  double_filtered_segment = band_pass(filtered_segment)
+  if double_filter:
+    double_filtered_segment = band_pass(filtered_segment, 59, 61)
+    prev_e = energy(double_filtered_segment[samples_to_adapt:])
+  else:
+    prev_e = energy(filtered_segment[samples_to_adapt:])
   
   output = np.concatenate([output, filtered_segment])
 
-  prev_e = energy(double_filtered_segment[samples_to_adapt:])
   last_inc_dir = 1
   i = samples_btwn_segments
-  energies = []
+  energies = [prev_e]
   while i < (len(input_signal) - samples_to_adapt):
     end = i + samples_per_segment
     if end > len(input_signal):
@@ -69,7 +76,7 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
     next_segment[:] = input_signal[i:end]
     filtered_segment = notch_filter(next_segment, sampling_period, freq, r)
     if double_filter:
-      doubled_filtered_segment = band_pass(filtered_segment)
+      doubled_filtered_segment = band_pass(filtered_segment, 59, 61)
       e = energy(double_filtered_segment[samples_to_adapt:])
     else:
       e = energy(filtered_segment[samples_to_adapt:])
@@ -86,7 +93,7 @@ def adaptive_notch(input_signal, sampling_period=.001, start_freq=60, r=.99,
     prev_e = e
     i += samples_btwn_segments
 
-  return output, energy
+  return output, energies
 
 def energy(signal):
   return sum(np.power(signal, 2))
@@ -103,10 +110,11 @@ if __name__=="__main__":
     exit()
   noise_file = sys.argv[1]
   no_noise_file = sys.argv[2]
-  if len(sys.argv) >= 3:
+  if len(sys.argv) > 3:
     # optional commandline arg determines if energy is based on band-passed
     # filtered signal (true) or just the filtered signal (false)
-    double_filter = bool(sys.argv[2])
+    double_filter = bool(int(sys.argv[3]))
+    print "double_filter:", double_filter
   
   sampling_period = .001
   
@@ -127,7 +135,9 @@ if __name__=="__main__":
 
   filtered = notch_filter(noise_data, sampling_period)
 
-  adapt_filtered = adaptive_notch(noise_data)
+  adapt_filtered, energies = adaptive_notch(
+      noise_data, double_filter=double_filter)
+  print "energies:", energies
   """
   with open("output_4-28-001.csv", "wb") as adapt_output:
     writer = csv.writer(adapt_output)
@@ -156,7 +166,7 @@ if __name__=="__main__":
   plt.title('adaptive notch filter output')
 
   plt.figure()
-  plt.plot(band_pass(noise_data[:5000]))
+  plt.plot(band_pass(noise_data[:5000], 59, 60))
   plt.title("ahhhhhhhhhhhhhhhhhhhh")
 
   plt.show()
